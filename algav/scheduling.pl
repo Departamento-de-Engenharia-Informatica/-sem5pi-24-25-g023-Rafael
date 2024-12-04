@@ -23,7 +23,7 @@ staff(d004,doctor,orthopaedist,[so2,so3,so4]).
 
 %doctor,nurse, tectinician
 
-%surgery(SurgeryType,TAnesthesia,TSurgery,TCleaning).
+%surgery(SurgeryType,TAnesthesia,TSurgery,TCleaning). se calhar so topar o tempo total
 
 surgery(so2,45,60,45).
 surgery(so3,45,90,45).
