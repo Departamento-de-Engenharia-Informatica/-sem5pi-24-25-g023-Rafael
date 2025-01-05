@@ -42,6 +42,10 @@ assignment_surgery(so100005,d002).
 agenda_operation_room(or1,20241028,[(520,579,so100000),(1000,1059,so099999)]).
 agenda_operation_room(or2,20241028,[]).
 agenda_operation_room(or3,20241028,[]).
+
+room(or1).
+room(or2).
+room(or3).
  
 free_agenda0([],[(0,1440)]).
 free_agenda0([(0,Tfin,_)|LT],LT1):-!,free_agenda1([(0,Tfin,_)|LT],LT1).
@@ -210,7 +214,11 @@ list_doctors_agenda(Day,[D|LD],[(D,AgD)|LAgD]):-agenda_staff1(D,Day,AgD),list_do
 remove_equals([],[]).
 remove_equals([X|L],L1):-member(X,L),!,remove_equals(L,L1).
 remove_equals([X|L],[X|L1]):-remove_equals(L,L1).
- 
+
+assign_all_surgeries(Day) :-
+    write('Assigning all surgeries for day '), write(Day), nl,
+    schedule_surgeries_by_room(Day).
+
 schedule_surgeries_by_room(Day) :-
     % initialization of memmory
     retractall(agenda_staff1(_,_,_)),
@@ -224,35 +232,40 @@ schedule_surgeries_by_room(Day) :-
     % Prepare staff availability
     findall(_,(agenda_staff1(D,Day,L),free_agenda0(L,LFA),adapt_timetable(D,Day,LFA,LFA2),assertz(availability(D,Day,LFA2))),_),
     
-    % Get all rooms and surgeries
     findall(Room, agenda_operation_room(Room, Day, _), LRooms),
-    findall(OpCode, surgery_id(OpCode, _), Surgeries, 0),
-    
-    % Round-robin distribution
+    write('Rooms: '), write(LRooms), nl,
+    findall(SurgeryId, surgery_id(SurgeryId, _), Surgeries),
+    write('Surgeries: '), write(Surgeries), nl,
     room_distribution(Surgeries, LRooms, Day).
 
 % Distribute surgeries to rooms
 room_distribution([], _, _).
 room_distribution([SurgeryId|Rest], LRooms, Day, RoomIndex) :-
-    surgery_id(SurgeryId, OpType),
-    surgery(OpType, _, TSurgery, _),
-    
-    % Find possible doctors for the surgery
-    findall(Doctor, assignment_surgery(SurgeryId, Doctor), LDoctors),
-
-    % Calculate current room
     length(LRooms, NumRooms),
-    CurrentRoomIndex is RoomIndex mod NumRooms,
-    nth0(CurrentRoomIndex, LRooms, CurrentRoom),
-    
-    % Try to schedule surgery in current room
-    (surgery_by_room(SurgeryId, CurrentRoom, TSurgery, Day, LDoctors) -> true ; true),
-    
-    % Continue with next surgery and next room
-    room_distribution(Rest, LRooms, Day, RoomIndex + 1).
+    (NumRooms > 0 ->
+        CurrentRoomIndex is RoomIndex mod NumRooms,
+        nth0(CurrentRoomIndex, LRooms, CurrentRoom),
+        
+        % Find surgery details
+        surgery_id(SurgeryId, OpType),
+        surgery(OpType, _, TSurgery, _),
+        
+        % Find possible doctors for the surgery
+        findall(Doctor, assignment_surgery(SurgeryId, Doctor), LDoctors),
+
+        % Try to schedule surgery in current room
+        (surgery_by_room(SurgeryId, CurrentRoom, TSurgery, Day, LDoctors) -> true ; true),
+        
+        % Continue with next surgery and next room
+        room_distribution(Rest, LRooms, Day, RoomIndex + 1)
+    ;
+        write('Error: No rooms available'), nl,
+        fail
+    ).
 
 % Schedule a single surgery
 surgery_by_room(SurgeryId, Room, Duration, Day, Doctors) :-
+    write('Trying to schedule surgery '), write(SurgeryId), write(' in room '), write(Room), nl,
     
     % Find availability for doctors and room
     intersect_all_agendas(Doctors, Day, LA),
@@ -274,8 +287,9 @@ surgery_by_room(SurgeryId, Room, Duration, Day, Doctors) :-
         assertz(agenda_operation_room1(Room, Day, Agenda1)),
     
         % Update agendas
-        insert_agenda_doctors((Start, End, SurgeryId), Day, Doctors)
+        insert_agenda_doctors((Start, End, SurgeryId), Day, Doctors),
 
         write('Surgery '), write(SurgeryId), write(' scheduled in room '), write(Room), 
         write(' at '), write(Start), write(' to '), write(End), write(' for a total time of '), write(Duration), nl
     ).
+

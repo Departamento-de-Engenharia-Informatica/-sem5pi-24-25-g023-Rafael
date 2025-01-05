@@ -7,6 +7,7 @@
 :-dynamic prob_crossover/1.
 :-dynamic prob_mutation/1.
 :-dynamic selection_method/1.
+:- dynamic stability_generations/1.
  
 agenda_staff(d001,20241028,[(720,790,m01),(1080,1140,c01)]).
 agenda_staff(d002,20241028,[(850,900,m02),(901,960,m02),(1380,1440,c02)]).
@@ -170,10 +171,17 @@ order_population(PopValue, PopValueOrd) :-
  
  
 % Generate the next generation
-generate_generation(G, G, _, Pop, Counter, _, _, _) :- !,
+generate_generation(_, _, _, Pop, Counter, StartTime, MaxTime) :-
+  get_time(CurrentTime),
+  ElapsedTime is CurrentTime - StartTime,
+  ElapsedTime > MaxTime, !,  % Stop condition if elapsed time exceeds MaxTime
+  write('Runtime limit met.'), nl,
+  write('Final Generation '), write(Counter), write(':'), nl, write(Pop), nl.
+
+generate_generation(G, G, _, Pop, Counter, _, _) :- !,
   nl, write('Final Generation '), write(Counter), write(':'), nl, write(Pop), nl.
 
-generate_generation(N, G, ValidValue, Pop, Counter, StartTime, MaxTime, MaxStabilizationGenerations) :-
+generate_generation(N, G, ValidValue, Pop, Counter, StartTime, MaxTime) :-
   nl, write('Generation '), write(Counter), write(':'), nl, write(Pop), nl,
 
   % Identify the best individual from the current population
@@ -205,34 +213,10 @@ generate_generation(N, G, ValidValue, Pop, Counter, StartTime, MaxTime, MaxStabi
         elitist_method(Best*BestValue, NPopOrd, FinalPop)
       ; 
         non_elitist_method(Best*BestValue, NPopOrd, FinalPop)
-      ),
-      N1 is 0,
-      nl, write('NewBest value:'), write(NewBestValue), nl
-  ),
-
-  Counter1 is Counter + 1,
-
-  % Check stopping conditions
-  get_time(CurrentTime),
-  ElapsedTime is CurrentTime - StartTime,
-  (ElapsedTime > MaxTime -> 
-    write('Max runtime reached'), nl, write('Final Gen: '), write(Counter1), nl
-
-  ; (Counter >= G -> 
-      write('Generation limit reached'), nl, write('Final Gen: '), write(Counter1), nl
-
-    ; (BestValue =< ValidValue -> 
-        write('Value limit met at value'), write(BestValue), nl
-
-      ; (N1 >= MaxStabilizationGenerations -> 
-          write('Population stabilized at '), write(MaxStabilizationGenerations), write(' generations'), 
-          nl, write('Final Population: '), write(FinalPop), nl
-          
-        ; generate_generation(N1, G, ValidValue, FinalPop, Counter1, StartTime, MaxTime, MaxStabilizationGenerations)
-        )
       )
-    )
-  ).
+  ),
+  NewCounter is Counter + 1,
+  generate_generation(N1, G, ValidValue, FinalPop, NewCounter, StartTime, MaxTime).
 
 % Elitist selection method
 elitist_method(Best*BestValue, Population, FinalPopulation) :-
@@ -307,29 +291,32 @@ generate_crossover_points(P1,P2):-
   P11\==P21,!,
   ((P11<P21,!,P1=P11,P2=P21);P1=P21,P2=P11).
 
-crossover([ ],[ ],_).
-crossover([Ind*_],[Ind],_).
-crossover([Ind1*_,Ind2*_|Rest],[NInd1,NInd2|Rest1]):-
-  random(0,2,Rand)
+crossover([], [], _).
+crossover([Ind*_], [Ind], _).
+crossover([Ind1*_, Ind2*_|Rest], [NInd1, NInd2|Rest1]) :-
+  random(0, 2, Rand),
 
-  length(Rest,Len),
-  (Len > 0 -> 
-    random(0,Len,RandomIndex),
+  length(Rest, Len),
+  (Len > 0 ->
+    random(0, Len, RandomIndex),
     nth0(RandomIndex, Rest, NextInd*_)
     ; NextInd = Ind2
   ),
 
   (Rand =:= 0 ->
-    generate_crossover_points(P1,P2),
+    generate_crossover_points(P1, P2),
     prob_crossover(Pcruz),
-    random(0.0,1.0,Pc),
-    ((Pc =< Pcruz,!,
-      cross(Ind1,NextInd,P1,P2,NInd1),
-      cross(NextInd,Ind1,P1,P2,NInd2))
+    random(0.0, 1.0, Pc),
+    (Pc =< Pcruz ->
+      cross(Ind1, NextInd, P1, P2, NInd1),
+      cross(NextInd, Ind1, P1, P2, NInd2)
+    ;
+      NInd1 = Ind1, NInd2 = NextInd
+    )
   ;
-  (NInd1=Ind1,NInd2=NextInd))
+    NInd1 = Ind1, NInd2 = Ind2
   ),
-  crossover(Rest,Rest1).
+  crossover(Rest, Rest1).
 
 % Helper predicates
 last([X], X) :- !.
