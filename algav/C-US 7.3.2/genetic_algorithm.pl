@@ -85,7 +85,8 @@ generate:-
   generations(NG),
   value_limit(ValidValue),
   max_time(MaxTime),
-  generate_generation(0,NG,ValidValue,PopOrd,0,StartTime,MaxTime).
+  stability_generations(StabilityGenerations),
+  generate_generation(0,NG,ValidValue,PopOrd,0,StartTime,MaxTime,StabilityGenerations).
  
  
 generate_population(Pop):-
@@ -171,20 +172,19 @@ order_population(PopValue, PopValueOrd) :-
  
  
 % Generate the next generation
-generate_generation(_, _, _, Pop, Counter, StartTime, MaxTime) :-
+generate_generation(_, _, _, Pop, Counter, StartTime, MaxTime,_) :-
   get_time(CurrentTime),
   ElapsedTime is CurrentTime - StartTime,
   ElapsedTime > MaxTime, !,  % Stop condition if elapsed time exceeds MaxTime
   write('Runtime limit met.'), nl,
   write('Final Generation '), write(Counter), write(':'), nl, write(Pop), nl.
 
-generate_generation(G, G, _, Pop, Counter, _, _) :- !,
+generate_generation(G, G, _, Pop, Counter, _, _,_) :- !,
   nl, write('Final Generation '), write(Counter), write(':'), nl, write(Pop), nl.
 
-generate_generation(N, G, ValidValue, Pop, Counter, StartTime, MaxTime) :-
+generate_generation(N, G, ValidValue, Pop, Counter, StartTime, MaxTime, MaxStabilizationGenerations) :-
   nl, write('Generation '), write(Counter), write(':'), nl, write(Pop), nl,
 
-  % Identify the best individual from the current population
   Pop = [Best*BestValue|_],
   write('Best individual: '), write(Best), write(' with Value: '), write(BestValue), nl,
 
@@ -216,7 +216,17 @@ generate_generation(N, G, ValidValue, Pop, Counter, StartTime, MaxTime) :-
       )
   ),
   NewCounter is Counter + 1,
-  generate_generation(N1, G, ValidValue, FinalPop, NewCounter, StartTime, MaxTime).
+
+  (BestValue =< ValidValue -> 
+        write('Value limit met at value'), write(BestValue), nl
+
+      ; (N1 >= MaxStabilizationGenerations -> 
+          write('Population stabilized at '), write(MaxStabilizationGenerations), write(' generations'), 
+          nl, write('Final Population: '), write(FinalPop), nl
+        ;
+        generate_generation(N1, G, ValidValue, FinalPop, NewCounter, StartTime, MaxTime, MaxStabilizationGenerations)
+      )
+  ).
 
 % Elitist selection method
 elitist_method(Best*BestValue, Population, FinalPopulation) :-
